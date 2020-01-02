@@ -3,6 +3,10 @@
         "symfony/http-foundation": "^v5",
         "symfony/routing": "^5.0",
         "symfony/var-dumper": "^5.0",
-        "symfony/http-kernel": "^5.0"
+        "symfony/http-kernel": "^5.0",
+        "symfony/event-dispatcher": "^5.0"
+    },
+    "autoload": {
+        "psr-4": { "": "src/" }
     }
 }
