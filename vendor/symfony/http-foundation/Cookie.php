@@ -32,6 +32,7 @@ class Cookie
 
     private $raw;
     private $sameSite;
+    private $secureDefault = false;
 
     private static $reservedCharsList = "=,; \t\r\n\v\f";
     private static $reservedCharsFrom = ['=', ',', ';', ' ', "\t", "\r", "\n", "\v", "\f"];
@@ -40,12 +41,9 @@ class Cookie
     /**
      * Creates cookie from raw header string.
      *
-     * @param string $cookie
-     * @param bool   $decode
-     *
      * @return static
      */
-    public static function fromString($cookie, $decode = false)
+    public static function fromString(string $cookie, bool $decode = false)
     {
         $data = [
             'expires' => 0,
@@ -56,34 +54,25 @@ class Cookie
             'raw' => !$decode,
             'samesite' => null,
         ];
-        foreach (explode(';', $cookie) as $part) {
-            if (false === strpos($part, '=')) {
-                $key = trim($part);
-                $value = true;
-            } else {
-                list($key, $value) = explode('=', trim($part), 2);
-                $key = trim($key);
-                $value = trim($value);
-            }
-            if (!isset($data['name'])) {
-                $data['name'] = $decode ? urldecode($key) : $key;
-                $data['value'] = true === $value ? null : ($decode ? urldecode($value) : $value);
-                continue;
-            }
-            switch ($key = strtolower($key)) {
-                case 'name':
-                case 'value':
-                    break;
-                case 'max-age':
-                    $data['expires'] = time() + (int) $value;
-                    break;
-                default:
-                    $data[$key] = $value;
-                    break;
-            }
+
+        $parts = HeaderUtils::split($cookie, ';=');
+        $part = array_shift($parts);
+
+        $name = $decode ? urldecode($part[0]) : $part[0];
+        $value = isset($part[1]) ? ($decode ? urldecode($part[1]) : $part[1]) : null;
+
+        $data = HeaderUtils::combine($parts) + $data;
+
+        if (isset($data['max-age'])) {
+            $data['expires'] = time() + (int) $data['max-age'];
         }
 
-        return new static($data['name'], $data['value'], $data['expires'], $data['path'], $data['domain'], $data['secure'], $data['httponly'], $data['raw'], $data['samesite']);
+        return new static($name, $value, $data['expires'], $data['path'], $data['domain'], $data['secure'], $data['httponly'], $data['raw'], $data['samesite']);
+    }
+
+    public static function create(string $name, string $value = null, $expire = 0, ?string $path = '/', string $domain = null, bool $secure = null, bool $httpOnly = true, bool $raw = false, ?string $sameSite = self::SAMESITE_LAX): self
+    {
+        return new self($name, $value, $expire, $path, $domain, $secure, $httpOnly, $raw, $sameSite);
     }
 
     /**
@@ -92,14 +81,14 @@ class Cookie
      * @param int|string|\DateTimeInterface $expire   The time the cookie expires
      * @param string                        $path     The path on the server in which the cookie will be available on
      * @param string|null                   $domain   The domain that the cookie is available to
-     * @param bool                          $secure   Whether the cookie should only be transmitted over a secure HTTPS connection from the client
+     * @param bool|null                     $secure   Whether the client should send back the cookie only over HTTPS or null to auto-enable this when the request is already using HTTPS
      * @param bool                          $httpOnly Whether the cookie will be made accessible only through the HTTP protocol
      * @param bool                          $raw      Whether the cookie value should be sent with no url encoding
      * @param string|null                   $sameSite Whether the cookie will be available for cross-site requests
      *
      * @throws \InvalidArgumentException
      */
-    public function __construct($name, $value = null, $expire = 0, $path = '/', $domain = null, $secure = false, $httpOnly = true, $raw = false, $sameSite = null)
+    public function __construct(string $name, string $value = null, $expire = 0, ?string $path = '/', string $domain = null, bool $secure = null, bool $httpOnly = true, bool $raw = false, ?string $sameSite = 'lax')
     {
         // from PHP source code
         if ($raw && false !== strpbrk($name, self::$reservedCharsList)) {
@@ -126,11 +115,13 @@ class Cookie
         $this->domain = $domain;
         $this->expire = 0 < $expire ? (int) $expire : 0;
         $this->path = empty($path) ? '/' : $path;
-        $this->secure = (bool) $secure;
-        $this->httpOnly = (bool) $httpOnly;
-        $this->raw = (bool) $raw;
+        $this->secure = $secure;
+        $this->httpOnly = $httpOnly;
+        $this->raw = $raw;
 
-        if (null !== $sameSite) {
+        if ('' === $sameSite) {
+            $sameSite = null;
+        } elseif (null !== $sameSite) {
             $sameSite = strtolower($sameSite);
         }
 
@@ -258,7 +249,7 @@ class Cookie
      */
     public function isSecure()
     {
-        return $this->secure;
+        return $this->secure ?? $this->secureDefault;
     }
 
     /**
@@ -299,5 +290,13 @@ class Cookie
     public function getSameSite()
     {
         return $this->sameSite;
+    }
+
+    /**
+     * @param bool $default The default value of the "secure" flag when it is set to null
+     */
+    public function setSecureDefault(bool $default): void
+    {
+        $this->secureDefault = $default;
     }
 }
