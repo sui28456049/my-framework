@@ -236,6 +236,7 @@ class Request
      */
     public function __construct(array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
+
         $this->initialize($query, $request, $attributes, $cookies, $files, $server, $content);
     }
 

@@ -11,6 +11,7 @@ use Symfony\Component\HttpKernel;
 $request = Request::createFromGlobals();
 $routes = include __DIR__.'/../src/routes.php';
 
+
 $context = new Routing\RequestContext();
 $matcher = new Routing\Matcher\UrlMatcher($routes, $context);
 
